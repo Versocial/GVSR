@@ -111,9 +111,11 @@ class Eval_grvidsitu(nn.Module):
             val_loss = compute_avg_dict(val_losses, nums)
         
         out_acc = {}
-        for results, fname, eval_fn in (list(zip([results_SRL, results_vb], [fname_SRL, fname_vb], [self.eval_SRL.evl_fn, self.eval_vb.evl_fn]))):
+        # print(len(list(zip([results_SRL, results_vb], [fname_SRL, fname_vb], [self.eval_SRL.evl_fn, self.eval_vb.evl_fn]))),"!!!!")
+
+        for is_vb_but_SRL,(results, fname, eval_fn) in enumerate(list(zip([results_SRL, results_vb], [fname_SRL, fname_vb], [self.eval_SRL.evl_fn, self.eval_vb.evl_fn]))):
             pickle.dump(results, open(fname, "wb"))
-            
+            print(fname,len(results),eval_fn,is_vb_but_SRL)
             if results == []:
                 break
 
@@ -122,8 +124,9 @@ class Eval_grvidsitu(nn.Module):
                 curr_results = results
                 world_size = get_world_size()
                 for w in range(1, world_size):
-                    tmp_file = Path(pred_path) / f"{dl_name}_{w}.pkl"
+                    tmp_file = Path(pred_path) / f"{dl_name}_{w}_srl.pkl" if is_vb_but_SRL==0 else Path(pred_path) / f"{dl_name}_{w}_vb.pkl"
                     with open(tmp_file, "rb") as f:
+                        
                         tmp_results = pickle.load(f)
                     curr_results += tmp_results
                     tmp_file.unlink

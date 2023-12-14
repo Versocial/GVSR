@@ -8,3 +8,5 @@ mlruns/
 model_weights/*.pth
 .vscode/
 run_command.txt
+data/
+features/

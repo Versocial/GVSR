@@ -72,7 +72,7 @@ def learner_init(uid: str, cfg: CN) -> Learner:
                 output_device=cur_device,
                 broadcast_buffers=True,
                 find_unused_parameters=True,
-            )
+            ).module
 
     learn = Learner(
         uid=uid,
