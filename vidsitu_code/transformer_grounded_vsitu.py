@@ -133,6 +133,9 @@ class Transformer_VO_RO(nn.Module):
         vo_encoder_norm = nn.LayerNorm(self.d_vo_enc)
         self.vo_encoder = TransformerEncoder(vo_encoder_layer, num_enc_lyrs, vo_encoder_norm)
         
+        #V: event interaction layer
+        self.event_lstm = nn.LSTM(input_size=1024, hidden_size=1024, num_layers=4,batch_first=True) 
+
         # classifer (for verb prediction)
         if self.pred_vb:
             self.verb_classifier = nn.Sequential(nn.Linear(self.d_vo_enc, self.d_vo_enc*2),
@@ -237,7 +240,7 @@ class Transformer_VO_RO(nn.Module):
 
     def classify_role(self, vid_feats_5):
         pred_roles = self.role_classifer_l1(vid_feats_5) #BxNxD
-        pred_roles = F.sigmoid(self.role_classifer_l2(pred_roles)) #BxNx12
+        pred_roles = F.sigmoid(self.role_classifer_l2(pred_roles)) #BxNx12 #V: why 12?: 12 role types
         return pred_roles
 
     def compute_role_loss_enc(self, inp, pred_roles):
@@ -269,13 +272,14 @@ class Transformer_VO_RO(nn.Module):
         return atten_mask
 
     def process_role_query(self, inp, vid_5_feats, pred_roles, inference=False):
-        
+        # print("process role query",self.pred_role,inference)
         if self.pred_role and inference: #Create role query based on the predicted roles during inference only.
             B,N,D = vid_5_feats.size()
             pad_arg = self.arg_role_voc.pad_idx
             selected_roles = vid_5_feats.new(B,N,self.max_num_roles_per_event).long().fill_(pad_arg)
             selected_roles_pad_in_mask = vid_5_feats.new(B,N,self.max_num_roles_per_event).long().fill_(0)
 
+            # print("process role query ",vid_5_feats.size(),(B,N,D),pad_arg,selected_roles,selected_roles_pad_in_mask)
             for sample_idx, sample in enumerate(pred_roles):
                 for vid_idx, vid in enumerate(sample):
                     count_role=0
@@ -310,7 +314,7 @@ class Transformer_VO_RO(nn.Module):
         return vid_role_src_query, selected_roles_pad_in_mask, selected_roles
 
     
-    def forward(self, inp, cfg, inference=False):
+    def forward(self, inp, cfg, inference=False):#V:!!!!!
         vid_obj_enc_emb, attn_mask_vid_obj = self.process_vid_obj_inputs(inp)
 
         # Forward VO Transformer Encoder
@@ -318,20 +322,29 @@ class Transformer_VO_RO(nn.Module):
         vid_enc_out = vid_obj_out[:, 0:self.num_events, :]
         obj_enc_out = vid_obj_out[:, self.num_events:, :]
 
-        vb_pred = self.verb_classifier(vid_enc_out) #Bx5xnum_verb_class
+        #V: event interaction
+        vid_enc_out,_ = self.event_lstm(vid_enc_out)
 
+        vb_pred = self.verb_classifier(vid_enc_out) #Bx5xnum_verb_class
+        # print("vid_enc_out,obj_enc_out",vid_enc_out.size(),obj_enc_out.size())
+        # print("inp",type(inp))
+        # for k in inp.keys():
+        #     print("inp-",k,":",inp[k].size())
         if self.pred_vb and not inference:
             vb_loss = self.compute_vb_loss(inp, vb_pred)
         else:
             vb_loss = None
-        
+        # print("self.pred_role and not inference:",self.pred_role, not inference)
         if self.pred_role and not inference:
             pred_roles = self.classify_role(vid_enc_out)
             role_loss = self.compute_role_loss_enc(inp, pred_roles)
         else:
-            pred_roles = None
+            with torch.no_grad():
+                pred_roles = self.classify_role(vid_enc_out)
+            # pred_roles = None
             role_loss = None
-
+        # print("pred_roles",pred_roles.size())
+        # input()
         # Process the role query for role decoder
         vid_role_src_query, roles_pad_mask_in, selected_roles = self.process_role_query(inp, vid_enc_out, pred_roles, inference=inference)
         roles_pad_mask_in = roles_pad_mask_in.bool()
@@ -379,7 +392,7 @@ class TransformerEncoderLayer(nn.Module):
         self.norm2 = nn.LayerNorm(d_model)
         self.dropout1 = nn.Dropout(dropout)
         self.dropout2 = nn.Dropout(dropout)
-
+        
         self.activation = _get_activation_fn(activation)
 
     def forward(self, cfg, src, src_key_padding_mask: Optional[Tensor] = None):

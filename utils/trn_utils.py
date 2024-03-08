@@ -95,14 +95,22 @@ def reduce_dict(input_dict, average=False):
         values = []
         # sort the keys so that they are consistent across processes
         for k in sorted(input_dict.keys()):
+            print("!!!",k,names,dist.get_rank())
+            print(values,dist.get_rank())
+            # print(values,type(values))
+            # print(values.size(),len(values))
             names.append(k)
+            print("before reduce",values,type(values),dist.get_rank())
             values.append(input_dict[k])
-            values = torch.stack(values, dim=0)
-            dist.reduce(values, dst=0)
-            # if dist.get_rank() == 0:
-            # only main process gets accumulated, so only divide by
-            # world_size in this case
-            # values /= world_size
+            # print(values,type(values))
+        values = torch.stack(values, dim=0)#V: stack them
+        # print(values.size(),values,len(values),"!")
+        dist.reduce(values, dst=0)#V: distributed sum,sum to process 0
+        print("after reduce",values,dist.get_rank())
+        # if dist.get_rank() == 0:
+        # only main process gets accumulated, so only divide by
+        # world_size in this case
+        # values /= world_size
         if average:
             values /= world_size
         reduced_dict = {k: v for k, v in zip(names, values)}
@@ -574,6 +582,7 @@ class Learner:
             del loss
             del batch
         self.optimizer.zero_grad()
+        # print("trn_loss.smooth!",trn_loss.smooth,dist.get_rank())
         out_loss = reduce_dict(trn_loss.smooth, average=True)
         if self.trn_met:
             out_met = reduce_dict(trn_acc.smooth, average=True)
@@ -768,7 +777,7 @@ class Learner:
                 self.num_epoch += 1
                 train_loss, train_acc = self.train_epoch(mb)
                 synchronize()
-                valid_loss, valid_acc = self.validate(self.data.valid_dl, mb)
+                valid_loss, valid_acc = self.validate(self.data.valid_dl, mb)#V: mistake in validate ?
                 # print('Iou_raw: {}, Iou@30: {}, Iou@50: {}'.format(ious[0], ious[1], ious[2]))
                 time.sleep(2)
                 synchronize()

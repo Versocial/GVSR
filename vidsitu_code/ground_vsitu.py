@@ -47,7 +47,7 @@ class Grounded_VidSitu(nn.Module):
         inp['args_all_ev'] = inp['args_all_ev'][:,:,[0],:]
         inp['verbs_all_ev'] = inp['verbs_all_ev'][:,:,[0]]
         inp['args_len_all_ev'] = inp['args_len_all_ev'][:,:,[0],:]
-        vb_preds, vb_loss, pred_roles, role_loss, grounded_nouns, bb_attn, selected_roles = self.tx_vo_ro(inp, self.cfg, inference=True)
+        vb_preds, vb_loss, pred_roles, role_loss, grounded_nouns, bb_attn, selected_roles = self.tx_vo_ro(inp, self.cfg, inference=True)#V: inference !
 
         # compute the input and masks for caption decoder
         selected_roles_pad_mask = inp['args_len_all_ev'] #Bx5x1x6
